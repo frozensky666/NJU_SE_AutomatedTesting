@@ -38,13 +38,13 @@ def generate(images: numpy.ndarray, shape: tuple):
         pred_label = numpy.argmax(model.predict(
             numpy.reshape(images[i], (1, 28, 28))))
         img_after = attack(model, images[i].reshape(
-            28*28), pred_label, 5, 0.3)
+            28*28), pred_label, 8, 0.23)
         res = numpy.concatenate((res, img_after.reshape(28*28)))
         print("\rNo.{}      Success: {}{}{}      Success_rate: {:.2f}      Runtime: {:.2f}s".format(
             i+1, ok, "/", count, ok/(i+1), time.time()-start_time), end='      ')
         tmp_sim = sim.SIM(images[i].reshape(
             28, 28), img_after.reshape(28, 28))
-        print("sim: {:.2f}".format(tmp_sim), end="")
+        print("sim: {:.2f}".format(tmp_sim), end="\n")
     print()
     ok = 0
     return res.reshape(shape)
@@ -61,16 +61,35 @@ def attack_neighbors(image_d1, locale, attack_range, offset):  # 按照十字星
     # offset: 像素偏移量
     row = locale//28
     col = locale % 28
-    image_d1[locale] += offset
+    image_d1[locale] = (image_d1[locale]+offset+1) % 1
     for i in range(1, attack_range):
         if(col+i < 28):
-            image_d1[row*28+col+i] += offset
+            image_d1[row*28+col+i] = (image_d1[row*28+col+i]+offset+1) % 1
         if(col-i >= 0):
-            image_d1[row*28+col-i] += offset
+            image_d1[row*28+col-i] = (image_d1[row*28+col-i]+offset+1) % 1
         if(row+i < 28):
-            image_d1[(row+i)*28+col] += offset
+            image_d1[(row+i)*28+col] = (image_d1[(row+i)*28+col]+offset+1) % 1
         if(row-i >= 0):
-            image_d1[(row-i)*28+col] += offset
+            image_d1[(row-i)*28+col] = (image_d1[(row-i)*28+col]+offset+1) % 1
+
+
+def attack_neighbors_2(image_d1, locale, attack_range, px):  # 按照十字星的方式攻击locale附近的像素
+    # image_d1: 图片一维载入
+    # locale: 攻击位置
+    # attack_range: 攻击范围(十字的臂长)
+    # px: 像素的值
+    row = locale//28
+    col = locale % 28
+    image_d1[locale] = px
+    for i in range(1, attack_range):
+        if(col+i < 28):
+            image_d1[row*28+col+i] = px
+        if(col-i >= 0):
+            image_d1[row*28+col-i] = px
+        if(row+i < 28):
+            image_d1[(row+i)*28+col] = px
+        if(row-i >= 0):
+            image_d1[(row-i)*28+col] = px
 
 
 def flags_on(flag: list, locale, attack_range):
@@ -99,6 +118,7 @@ def attack(model, image_d1, label, num_iters, offset=0.3):
     # num_iters :成功攻击次数
     # offset: 单像素最大偏移量
 
+    global ok
     # starttime = time.time()
     pred_edge = 0.3  # 预测率降低到该值以下表示我认为的攻击成功
     image = copy.deepcopy(image_d1)
@@ -107,8 +127,8 @@ def attack(model, image_d1, label, num_iters, offset=0.3):
     # print("pred_before:", pred1)
     j = 0  # 攻击成功次数
     count = 0  # 攻击次数统计(random失败也会少量增加该值，以防死循环)
-    attack_range = 28  # 十字星臂长
-    while j <= num_iters and count <= 100 and pred1 > 0.3:
+    attack_range = 6  # 十字星臂长
+    while j <= num_iters and count <= 100 and pred1 > pred_edge:
         # 攻击次数大于num_iter/ 攻击次数上限100 / 预测率小于等于0.3来作为攻击成功标志(实际上攻击可能没有成功，但是成功的概率很大)
         tmp = randomInt()
         if flag[tmp] == 3:
@@ -134,9 +154,23 @@ def attack(model, image_d1, label, num_iters, offset=0.3):
         attack_neighbors(image.reshape(28*28), tmp,
                          attack_range, offset)  # 攻击失败，恢复图像
         flags_on(flag, tmp, attack_range)  # 攻击无效标记,以后不再攻击相关像素点
-    if pred1 <= 0.3:
-        global ok
+    if pred1 <= pred_edge:
         ok += 1
+    else:
+        count = 0
+        while count < 300:
+            count += 1
+            tmp_locale = randomInt()
+            tmp_color = randint(0, 255)/255
+            tmp_image = copy.deepcopy(image)
+            attack_neighbors_2(tmp_image.reshape(
+                28*28), tmp_locale, 28, tmp_color)
+            pred2 = model.predict(tmp_image.reshape(1, 28, 28))[0][label]
+            if pred2 < pred_edge:
+                attack_neighbors_2(image.reshape(
+                    28*28), tmp_locale, 28, tmp_color)
+                ok += 1
+                break
 
     # print("pred_after: {}".format(pred1))
     # endtime = time.time()
@@ -148,27 +182,27 @@ if __name__ == "__main__":
 
     # tracemalloc.start()  # 开始跟踪内存分配
 
-    count = 100  # 选择前几张测试图片
+    count = 10000  # 选择前几张测试图片
     shape = (count, 28, 28, 1)  # generate 输入输出格式
     model_shape = (count, 28, 28)  # model 输入格式
 
     # 从npy文件中加载数据
     test_images = numpy.load("test_data/test_data.npy")
-    # attack_images = numpy.load("attack_data/attack_data.npy")
-    # test_labels = numpy.load("test_data/test_labels.npy")
+    attack_images = numpy.load("attack_data/attack_data.npy")
+    test_labels = numpy.load("test_data/test_labels.npy")
 
     # model = keras.models.load_model("model.h5") #正常加载模型，但是这种加载出来的模型在循环调用中会内存泄漏
     # tf.keras.experimental.export_saved_model(model, "model") #神秘的存储方式，存在model文件夹中,这玩意儿跑起来贼快
 
-    images_after = generate(
-        test_images[:count].reshape(shape), shape)  # 生成对抗样本
+    # images_after = generate(
+    #     test_images[:count].reshape(shape), shape)  # 生成对抗样本
     # numpy.save("./attack_data/attack_data.npy", images_after)  # 存储对抗样本
 
     # ----------------------- 对抗样本来评估模型 -----------------------
-    # model_eva = keras.models.load_model("model.h5")
-    # loss, acc = model_eva.evaluate(
-    #     images_after.reshape(model_shape), test_labels[:count])
-    # print("Restored model, accuracy: {:5.2f}%".format(100*acc))   #
+    model_eva = keras.models.load_model("model.h5")
+    loss, acc = model_eva.evaluate(
+        attack_images.reshape(model_shape), test_labels[:count])
+    print("Restored model, accuracy: {:5.2f}%".format(100*acc))   #
 
     # ---------------------- 普通测试集来评估模型 --------------
     # model.summary()

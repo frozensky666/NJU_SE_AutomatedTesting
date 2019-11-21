@@ -27,4 +27,4 @@ def show(index):  # 显示从index开始的10张图片的前后对比
 
 
 if __name__ == "__main__":
-    show(1000)
+    show(9087)
