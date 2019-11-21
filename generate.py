@@ -25,6 +25,8 @@ ok = 0  # 存储算法中的“攻击成功”次数
 def generate(images: numpy.ndarray, shape: tuple):
 
     # 生成对抗样本
+    if numpy.max(images[0]) > 1:
+        images = images/255.0
     global ok
     start_time = time.time()  # 开始时间
     count = shape[0]  # 图片数量
