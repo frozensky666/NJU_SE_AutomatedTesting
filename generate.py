@@ -156,7 +156,7 @@ def attack(model, image_d1, label, num_iters, offset=0.3):
         flags_on(flag, tmp, attack_range)  # 攻击无效标记,以后不再攻击相关像素点
     if pred1 <= pred_edge:
         ok += 1
-    else:
+    else:  # 换一个算法攻击上面没有攻击成功的图片，算法效率不如上面但是攻击效果比上面好
         count = 0
         while count < 300:
             count += 1
@@ -182,27 +182,27 @@ if __name__ == "__main__":
 
     # tracemalloc.start()  # 开始跟踪内存分配
 
-    count = 10000  # 选择前几张测试图片
+    count = 100  # 选择前几张测试图片
     shape = (count, 28, 28, 1)  # generate 输入输出格式
     model_shape = (count, 28, 28)  # model 输入格式
 
     # 从npy文件中加载数据
     test_images = numpy.load("test_data/test_data.npy")
-    attack_images = numpy.load("attack_data/attack_data.npy")
+    # attack_images = numpy.load("attack_data/attack_data.npy")
     test_labels = numpy.load("test_data/test_labels.npy")
 
     # model = keras.models.load_model("model.h5") #正常加载模型，但是这种加载出来的模型在循环调用中会内存泄漏
     # tf.keras.experimental.export_saved_model(model, "model") #神秘的存储方式，存在model文件夹中,这玩意儿跑起来贼快
 
-    # images_after = generate(
-    #     test_images[:count].reshape(shape), shape)  # 生成对抗样本
+    images_after = generate(
+        test_images[:count].reshape(shape), shape)  # 生成对抗样本
     # numpy.save("./attack_data/attack_data.npy", images_after)  # 存储对抗样本
 
     # ----------------------- 对抗样本来评估模型 -----------------------
-    model_eva = keras.models.load_model("model.h5")
-    loss, acc = model_eva.evaluate(
-        attack_images.reshape(model_shape), test_labels[:count])
-    print("Restored model, accuracy: {:5.2f}%".format(100*acc))   #
+    # model_eva = keras.models.load_model("model.h5")
+    # loss, acc = model_eva.evaluate(
+    #     attack_images.reshape(model_shape), test_labels[:count])
+    # print("Restored model, accuracy: {:5.2f}%".format(100*acc))   #
 
     # ---------------------- 普通测试集来评估模型 --------------
     # model.summary()
